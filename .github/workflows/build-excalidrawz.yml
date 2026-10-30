@@ -1,0 +1,119 @@
+name: Build ExcalidrawZ (Optimized MCP patched)
+
+# 放到你自己 fork 的 .github/workflows/build-excalidrawz.yml
+# 运行环境：GitHub Actions 的 xcode-27 预览镜像（macOS 27 + Xcode 27.2 RC）
+# 产物：未签名的 ExcalidrawZ.app（zip），下载后本地 ad-hoc 签名即可运行。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # xcode-27 是 GitHub Actions 的 public preview 镜像（arm64）
+    # 如果提示找不到 runner，可改 xcode-27-xlarge；不要用 macos-latest（只有 Xcode 26.6 / SDK 26.5）
+    runs-on: xcode-27
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 27.2 and print toolchain
+        run: |
+          set -euo pipefail
+          if [ -d /Applications/Xcode_27.2.app ]; then
+            sudo xcode-select -s /Applications/Xcode_27.2.app
+          else
+            echo "Xcode_27.2.app not found, fallback to default Xcode"
+          fi
+          xcodebuild -version
+          xcrun --show-sdk-version --sdk macosx
+
+      - name: Write local build config
+        run: |
+          set -euo pipefail
+          mkdir -p Config
+          cat > Config/Overrides.xcconfig <<'EOF'
+          DEVELOPMENT_TEAM =
+          ICLOUD_CONTAINER = iCloud.com.example.excalidrawz
+          APP_GROUP_IDENTIFIER = group.com.example.excalidrawz
+          EOF
+          cat > Config/Secrets.plist <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>COLLAB_URL</key>
+              <string>https://example.com</string>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Patch Optimized MCP subscription gate
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("ExcalidrawZ/Subscription/Store_Shared.swift")
+          source = path.read_text()
+          start_marker = "    var canUseOptimizedMCPServices: Bool {"
+          end_marker = "        return activeSubscriptionItem >= .starter\n    }"
+
+          start = source.index(start_marker)
+          end = source.index(end_marker, start) + len(end_marker)
+          replacement = (
+              "    var canUseOptimizedMCPServices: Bool {\n"
+              "        ExcalidrawZMCPServerController.isAvailable\n"
+              "    }"
+          )
+          path.write_text(source[:start] + replacement + source[end:])
+          print("patched", path)
+          PY
+          grep -n -A3 'canUseOptimizedMCPServices' ExcalidrawZ/Subscription/Store_Shared.swift
+
+      - name: Resolve Swift packages
+        run: |
+          set -o pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project ExcalidrawZ.xcodeproj \
+            -scheme ExcalidrawZ
+
+      - name: Build (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ExcalidrawZ.xcodeproj \
+            -scheme ExcalidrawZ \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            build
+
+      - name: Package app
+        run: |
+          set -euo pipefail
+          APP="$(find build/Build/Products/Debug -maxdepth 1 -name 'ExcalidrawZ.app' -print -quit)"
+          test -n "$APP"
+          echo "APP=$APP"
+          ditto -c -k --keepParent "$APP" ExcalidrawZ-unsigned.zip
+          shasum -a 256 ExcalidrawZ-unsigned.zip | tee sha256.txt
+          ls -lh ExcalidrawZ-unsigned.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ExcalidrawZ-optimized-mcp-unsigned
+          path: |
+            ExcalidrawZ-unsigned.zip
+            sha256.txt
+          if-no-files-found: error
+          retention-days: 30
