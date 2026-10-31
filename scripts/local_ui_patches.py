@@ -98,4 +98,41 @@ if old not in s:
     raise SystemExit("applicationDidFinishLaunching block not found")
 p.write_text(s.replace(old, new, 1))
 
+# 8. Restore a toolbar for the floating-bar layout (legacy content view).
+p = root / "ExcalidrawZ/ContentView+/Detail/ContentViewLagacy.swift"
+s = p.read_text()
+old = """            .padding(.top, 10)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 40)
+        }
+    }
+}"""
+new = """            .padding(.top, 10)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 40)
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                NewFileButton(usesFileHomeOpenTransition: fileState.currentActiveGroup != nil)
+            }
+        }
+    }
+}"""
+if old not in s:
+    raise SystemExit("ContentViewLagacy body tail not found")
+p.write_text(s.replace(old, new, 1))
+
+# 9. Apply the opaque sidebar background only in the sidebar layout.
+p = root / "ExcalidrawZ/Sidebar/SidebarView.swift"
+s = p.read_text()
+old = "            .background(Color.windowBackgroundColor)"
+new = """            .background {
+                if appPreference.sidebarLayout == .sidebar {
+                    Color.windowBackgroundColor
+                }
+            }"""
+if old not in s:
+    raise SystemExit("sidebar background line not found")
+p.write_text(s.replace(old, new, 1))
+
 print("UI patches applied OK")
