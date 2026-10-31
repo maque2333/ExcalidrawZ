@@ -53,4 +53,15 @@ if old not in s:
     raise SystemExit("glassEffect block not found")
 p.write_text(s.replace(old, "                    .fill(tint)", 1))
 
+# 5. Hide the AI credits button in the top-right toolbar (home / no active file).
+p = root / "ExcalidrawZ/ExcalidrawView/Toolbar/ExcalidrawEditorToolbarModifier.swift"
+s = p.read_text()
+old = """                if aiChatPreferences.isAIEnabled && AIChatAvailability.isAvailable {
+                    AICreditsToolbarButton()
+                }
+"""
+if old not in s:
+    raise SystemExit("AI credits toolbar block not found")
+p.write_text(s.replace(old, "", 1))
+
 print("UI patches applied OK")
