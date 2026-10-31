@@ -64,4 +64,38 @@ if old not in s:
     raise SystemExit("AI credits toolbar block not found")
 p.write_text(s.replace(old, "", 1))
 
+# 6. Move the sidebar toolbar to the root NavigationSplitView (one unified top bar).
+p = root / "ExcalidrawZ/ContentView+/Detail/ContentViewModern.swift"
+s = p.read_text()
+patched = re.sub(r"\n[ \t]*\.toolbar\(content: sidebarToolbar\)", "", s)
+if patched == s:
+    raise SystemExit("sidebar toolbar attachments not found")
+old = """        } detail: {
+             ContentViewDetail(isSettingsPresented: $isSettingsPresented)
+        }"""
+new = old + "\n        .toolbar(content: sidebarToolbar)"
+if old not in patched:
+    raise SystemExit("NavigationSplitView detail block not found")
+p.write_text(patched.replace(old, new, 1))
+
+# 7. Remove the system titlebar separator line.
+p = root / "ExcalidrawZ/AppDelegate.swift"
+s = p.read_text()
+old = """    func applicationDidFinishLaunching(_ notification: Notification) {
+        // disable auto capitalization
+        UserDefaults.standard.set(false, forKey: "NSAutomaticCapitalizationEnabled")
+    }"""
+new = """    func applicationDidFinishLaunching(_ notification: Notification) {
+        // disable auto capitalization
+        UserDefaults.standard.set(false, forKey: "NSAutomaticCapitalizationEnabled")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            for window in NSApp.windows {
+                window.titlebarSeparatorStyle = .none
+            }
+        }
+    }"""
+if old not in s:
+    raise SystemExit("applicationDidFinishLaunching block not found")
+p.write_text(s.replace(old, new, 1))
+
 print("UI patches applied OK")
