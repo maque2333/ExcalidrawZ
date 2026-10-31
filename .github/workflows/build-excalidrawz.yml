@@ -75,6 +75,9 @@ jobs:
           PY
           grep -n -A3 'canUseOptimizedMCPServices' ExcalidrawZ/Subscription/Store_Shared.swift
 
+      - name: Apply local UI patches
+        run: python3 scripts/local_ui_patches.py "$PWD"
+
       - name: Fetch Excalidraw web assets from upstream release
         env:
           GH_TOKEN: ${{ github.token }}
