@@ -102,7 +102,15 @@ jobs:
           set -o pipefail
           xcodebuild -resolvePackageDependencies \
             -project ExcalidrawZ.xcodeproj \
-            -scheme ExcalidrawZ
+            -scheme ExcalidrawZ \
+            -derivedDataPath build
+
+      - name: Patch LLMKit so it stops using the login Keychain
+        run: |
+          set -euo pipefail
+          python3 scripts/patch_llmkit_keychain.py \
+            "$PWD/build/SourcePackages/checkouts/LLMKit" \
+            "$HOME/Library/Developer/Xcode/DerivedData"
 
       - name: Build (unsigned)
         run: |
@@ -119,6 +127,19 @@ jobs:
             -skipPackagePluginValidation \
             -skipMacroValidation \
             build
+
+      - name: Verify Keychain-free patches
+        run: |
+          set -euo pipefail
+          grep -q "backup-master-key" ExcalidrawZ/Persistence/Encryption/EncryptedBackupService.swift
+          APP="$(find build/Build/Products/Debug -maxdepth 1 -name 'ExcalidrawZ.app' -print -quit)"
+          BIN="$APP/Contents/MacOS/ExcalidrawZ.debug.dylib"
+          test -f "$BIN"
+          if strings -a "$BIN" | grep -q "com.chocoford.llmkit\."; then
+            echo "ERROR: LLMKit Keychain code is still compiled into the binary"
+            exit 1
+          fi
+          echo "OK: LLMKit Keychain code absent from binary"
 
       - name: Package app
         run: |
