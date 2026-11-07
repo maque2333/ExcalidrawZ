@@ -108,6 +108,7 @@ jobs:
       - name: Patch LLMKit so it stops using the login Keychain
         run: |
           set -euo pipefail
+          chmod -R u+w "$PWD/build/SourcePackages/checkouts/LLMKit" 2>/dev/null || true
           python3 scripts/patch_llmkit_keychain.py \
             "$PWD/build/SourcePackages/checkouts/LLMKit" \
             "$HOME/Library/Developer/Xcode/DerivedData"

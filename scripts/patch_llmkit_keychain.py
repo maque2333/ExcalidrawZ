@@ -43,7 +43,17 @@ for arg in sys.argv[1:]:
         source = source[:index] + REPLACEMENT
         if "SecItem" in source:
             raise SystemExit(f"SecItem still present after patch: {path}")
-        path.write_text(source)
+        try:
+            path.write_text(source)
+        except PermissionError:
+            # SwiftPM checkouts can be read-only; make the file and its parents writable.
+            for parent in [path.parent, path.parent.parent, path.parent.parent.parent]:
+                try:
+                    parent.chmod(parent.stat().st_mode | 0o200)
+                except OSError:
+                    pass
+            path.chmod(path.stat().st_mode | 0o200)
+            path.write_text(source)
         patched += 1
         print(f"patched {path}")
 
